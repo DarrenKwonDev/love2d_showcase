@@ -1,3 +1,4 @@
+---@diagnostic disable: deprecated
 function love.load()
     love.graphics.setBackgroundColor(0, 0, 0)
 
@@ -55,8 +56,7 @@ function love.draw()
         distance(EyeCenter.leftEyeX, EyeCenter.y, love.mouse.getX(), love.mouse.getY()),
         "rad left eyeball center .. cursor" ..
         math.atan2(love.mouse.getY() - EyeCenter.y, love.mouse.getX() - EyeCenter.leftEyeX),
-
-    }))
+    }, '\n'))
 end
 
 function distance(x1, y1, x2, y2)
