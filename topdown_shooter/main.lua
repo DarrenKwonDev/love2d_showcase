@@ -1,4 +1,11 @@
+eGameStates = {
+    MENU = 1,
+    PLAY = 2,
+}
+
 function love.load()
+    math.randomseed(os.time())
+
     sprites = {}
     sprites.background = love.graphics.newImage('sprites/background.png')
     sprites.bullet = love.graphics.newImage('sprites/bullet.png')
@@ -10,9 +17,17 @@ function love.load()
     player.y = love.graphics.getHeight() / 2
     player.speed = 175
 
+    myFont = love.graphics.newFont(40)
+
     zombies = {}
 
     bullets = {}
+
+    gameState = eGameStates.MENU
+    maxTime = 2
+    enemyResponeTimer = maxTime
+
+    score = 0
 end
 
 -- update는 frame마다 호출됨.
@@ -25,19 +40,37 @@ end
 -- update 호출이 더 자주 일어나지만 dt가 줄어들었으므로 dt를 곱하면 compensate됨.
 
 function love.update(dt)
-    -- love.keypressed는 한 번 누를 때마다 한 번씩
-    -- keyboard.isDown을 체크하는 방식은 한 번 누르고 있으면 주루루룩 호출됨.
-    if love.keyboard.isDown("d") or love.keyboard.isDown("right") then
-        player.x = player.x + player.speed * dt
-    end
-    if love.keyboard.isDown("a") or love.keyboard.isDown("left") then
-        player.x = player.x - player.speed * dt
-    end
-    if love.keyboard.isDown("w") or love.keyboard.isDown("up") then
-        player.y = player.y - player.speed * dt
-    end
-    if love.keyboard.isDown("s") or love.keyboard.isDown("down") then
-        player.y = player.y + player.speed * dt
+    if (gameState == eGameStates.PLAY) then
+        -- love.keypressed는 한 번 누를 때마다 한 번씩
+        -- keyboard.isDown을 체크하는 방식은 한 번 누르고 있으면 주루루룩 호출됨.
+        if love.keyboard.isDown("d") or love.keyboard.isDown("right") then
+            if (player.x > love.graphics.getWidth()) then
+                player.x = love.graphics.getWidth()
+            else
+                player.x = player.x + player.speed * dt
+            end
+        end
+        if love.keyboard.isDown("a") or love.keyboard.isDown("left") then
+            if (player.x < 0) then
+                player.x = 0
+            else
+                player.x = player.x - player.speed * dt
+            end
+        end
+        if love.keyboard.isDown("w") or love.keyboard.isDown("up") then
+            if (player.y < 0) then
+                player.y = 0
+            else
+                player.y = player.y - player.speed * dt
+            end
+        end
+        if love.keyboard.isDown("s") or love.keyboard.isDown("down") then
+            if (player.y > love.graphics.getHeight()) then
+                player.y = love.graphics.getHeight()
+            else
+                player.y = player.y + player.speed * dt
+            end
+        end
     end
 
     -- 매 frame마다 플레이어를 향해 이동하도록 함.
@@ -50,6 +83,7 @@ function love.update(dt)
         if distanceBetween(z.x, z.y, player.x, player.y) < 30 then
             for i, z in ipairs(zombies) do
                 zombies[i] = nil
+                gameState = eGameStates.MENU
             end
         end
     end
@@ -58,10 +92,62 @@ function love.update(dt)
         b.x = b.x + math.cos(b.direction) * b.speed * dt
         b.y = b.y + math.sin(b.direction) * b.speed * dt
     end
+
+    -- remove bullets
+    -- #table return count of table
+    for i = #bullets, 1, -1 do
+        local b = bullets[i]
+        if b.x < 0 or b.y < 0
+            or b.x > love.graphics.getWidth() or b.y > love.graphics.getHeight() then
+            -- 앞에서부터 remove하면 index가 교란됨. 뒤에서부터 지워야 함.
+            table.remove(bullets, i)
+        end
+    end
+
+    for i, z in ipairs(zombies) do
+        for j, b in ipairs(bullets) do
+            if distanceBetween(z.x, z.y, b.x, b.y) < 20 then
+                z.dead = true
+                b.dead = true
+                score = score + 1
+            end
+        end
+    end
+
+    for i = #zombies, 1, -1 do
+        local z = zombies[i]
+        if z.dead == true then
+            table.remove(zombies, i)
+        end
+    end
+
+    for j = #bullets, 1, -1 do
+        local b = bullets[j]
+        if b.dead == true then
+            table.remove(bullets, j)
+        end
+    end
+
+    if gameState == eGameStates.PLAY then
+        enemyResponeTimer = enemyResponeTimer - 1 * dt
+        if enemyResponeTimer <= 0 then
+            spawnZombie()
+            -- respone 타임이 점차 줄어들되 0이 되지는 않게.
+            maxTime = 0.95 * maxTime
+            enemyResponeTimer = maxTime
+        end
+    end
 end
 
 function love.draw()
     love.graphics.draw(sprites.background, 0, 0)
+
+    if gameState == eGameStates.MENU then
+        love.graphics.setFont(myFont)
+        love.graphics.printf("Click anywhere to begin!", 0, 50, love.graphics.getWidth(), "center")
+    end
+
+    love.graphics.printf("score : " .. score, 0, love.graphics.getHeight() - 100, love.graphics.getWidth(), "center")
 
     -- https://love2d.org/wiki/love.graphics.draw
     love.graphics.draw(sprites.player, player.x, player.y, playerMouseRadAngle(), nil, nil, sprites.player:getWidth() / 2,
@@ -108,9 +194,30 @@ end
 
 function spawnZombie()
     local zombie = {}
-    zombie.x = math.random(0, love.graphics.getWidth());
-    zombie.y = math.random(0, love.graphics.getHeight());
-    zombie.speed = 75;
+
+    zombie.x = 0
+    zombie.y = 0
+    zombie.speed = 75
+    zombie.dead = false
+
+    local side = math.random(1, 4)
+    -- left
+    if side == 1 then
+        zombie.x = -30
+        zombie.y = math.random(0, love.graphics.getHeight())
+        -- right
+    elseif side == 2 then
+        zombie.x = love.graphics.getWidth() + 30
+        zombie.y = math.random(0, love.graphics.getHeight())
+        -- top
+    elseif side == 3 then
+        zombie.x = math.random(0, love.graphics.getWidth())
+        zombie.y = -30
+        -- bottom
+    elseif side == 4 then
+        zombie.x = math.random(0, love.graphics.getWidth())
+        zombie.y = love.graphics.getHeight() + 30
+    end
 
     table.insert(zombies, zombie)
 end
@@ -120,6 +227,7 @@ function spawnBullet()
     bullet.x = player.x
     bullet.y = player.y
     bullet.speed = 500
+    bullet.dead = false
     bullet.direction = playerMouseRadAngle()
 
     table.insert(bullets, bullet)
@@ -132,7 +240,17 @@ function love.keypressed(key)
 end
 
 function love.mousepressed(x, y, button)
-    if button == 1 then
+    if button == 1 and gameState == eGameStates.PLAY then
         spawnBullet()
+    elseif button == 1 and gameState == eGameStates.MENU then
+        gameState = eGameStates.PLAY
+
+        player.x = love.graphics.getWidth() / 2
+        player.y = love.graphics.getHeight() / 2
+        score = 0
+
+        -- reset respone timer
+        maxTime = 2
+        enemyResponeTimer = maxTime
     end
 end
